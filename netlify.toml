@@ -1,0 +1,7 @@
+[build]
+  command = "npm run build"
+
+# Public browser values only (the Supabase publishable key is designed to ship to the browser).
+[build.environment]
+  NEXT_PUBLIC_SUPABASE_URL = "https://raotxtpvnypaijnbfelo.supabase.co"
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_WXyiBOoKnlKytTZ3yeYHkg_HMc7U0-i"
