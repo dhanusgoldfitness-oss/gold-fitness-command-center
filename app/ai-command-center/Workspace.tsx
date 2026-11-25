@@ -6,7 +6,15 @@ import { supabase } from "@/lib/supabase";
 import { routeTask } from "@/lib/route";
 
 type Task = { id: string; agent_id: string; title: string; status: string; created_at: string };
-type Approval = { id: string; task_id: string | null; agent_id: string; action: string; status: string; created_at: string };
+type Approval = {
+  id: string;
+  task_id: string | null;
+  agent_id: string;
+  action: string;
+  status: string;
+  created_at: string;
+  payload: { message_id?: string; phone?: string } | null;
+};
 
 const box = "rounded-2xl border border-neutral-800 bg-[#111] p-5";
 const input =
@@ -23,6 +31,7 @@ export default function Workspace() {
   const [text, setText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [edits, setEdits] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const t = await supabase.from("cc_tasks").select("*").order("created_at", { ascending: false }).limit(20);
@@ -86,6 +95,16 @@ export default function Workspace() {
   }
 
   async function decide(a: Approval, ok: boolean) {
+    // WhatsApp reply drafts go through the secure send function; nothing is sent without this tap.
+    if (a.payload?.message_id) {
+      const { data, error } = await supabase.functions.invoke("approve-send", {
+        body: { approval_id: a.id, text: edits[a.id], reject: !ok },
+      });
+      if (error || data?.error) setMsg(data?.detail || data?.error || error?.message || "Could not send");
+      else setMsg("");
+      load();
+      return;
+    }
     await supabase
       .from("cc_approvals")
       .update({ status: ok ? "approved" : "rejected", decided_at: new Date().toISOString() })
@@ -144,12 +163,23 @@ export default function Workspace() {
         ) : (
           <ul className="mt-3 space-y-3">
             {approvals.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 text-sm">
+              <li key={a.id} className="space-y-2 text-sm">
                 <span className="text-neutral-200">
-                  <b className="text-[#d4af37]">{a.agent_id}</b>: {a.action}
+                  <b className="text-[#d4af37]">{a.agent_id}</b>
+                  {a.payload?.message_id ? ` → WhatsApp ${a.payload.phone ?? ""}` : `: ${a.action}`}
                 </span>
+                {a.payload?.message_id && (
+                  <textarea
+                    className={input}
+                    rows={4}
+                    defaultValue={a.action.replace(/^Reply to [^:]*: /, "")}
+                    onChange={(e) => setEdits({ ...edits, [a.id]: e.target.value })}
+                  />
+                )}
                 <span className="flex gap-2">
-                  <button className={gold} onClick={() => decide(a, true)}>Approve</button>
+                  <button className={gold} onClick={() => decide(a, true)}>
+                    {a.payload?.message_id ? "Approve & send" : "Approve"}
+                  </button>
                   <button className="rounded-lg border border-neutral-600 px-3 py-2 text-xs text-white" onClick={() => decide(a, false)}>Reject</button>
                 </span>
               </li>
